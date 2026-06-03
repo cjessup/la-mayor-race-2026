@@ -419,6 +419,11 @@
         
         updateUI(data);
         
+        // Cache the successful result so we can show something useful if a future refresh temporarily fails
+        try {
+          localStorage.setItem('laMayorLastData', JSON.stringify(data));
+        } catch (e) {}
+        
         statusEl.innerHTML = '<i class="fa-solid fa-check mr-1.5 text-emerald-400"></i> Live from LA County';
         statusEl.className = 'font-medium text-emerald-300';
         
@@ -426,13 +431,32 @@
         resetCountdown();
       } catch (err) {
         console.error(err);
-        statusEl.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-1.5"></i> Update failed (retrying...)';
-        statusEl.className = 'font-medium text-amber-400';
         
-        // Show friendly message in UI if first load
-        const totalEl = document.getElementById('total-votes');
-        if (totalEl && totalEl.textContent.includes('0 votes')) {
-          totalEl.innerHTML = '<span class="text-amber-400">Awaiting first results</span>';
+        // Try to show the last successfully loaded data from localStorage
+        // so the user isn't left with a completely broken-looking page.
+        let showedCache = false;
+        try {
+          const cached = localStorage.getItem('laMayorLastData');
+          if (cached) {
+            const cachedData = JSON.parse(cached);
+            cachedData._fromCache = true;
+            updateUI(cachedData);
+            showedCache = true;
+          }
+        } catch (e) {}
+        
+        if (showedCache) {
+          statusEl.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-1.5"></i> Update failed — showing last known results (will retry)';
+          statusEl.className = 'font-medium text-amber-400';
+        } else {
+          statusEl.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-1.5"></i> Update failed (retrying...)';
+          statusEl.className = 'font-medium text-amber-400';
+          
+          // Show friendly message in UI if first load
+          const totalEl = document.getElementById('total-votes');
+          if (totalEl && totalEl.textContent.includes('0 votes')) {
+            totalEl.innerHTML = '<span class="text-amber-400">Awaiting first results</span>';
+          }
         }
       } finally {
         isFetching = false;
@@ -449,26 +473,33 @@
 
     function updateUI(data) {
       const { timestamp, totalVotes, candidates } = data;
+      const isCached = !!data._fromCache;
       
       // Update last updated
       const updatedEl = document.getElementById('last-updated');
       if (timestamp) {
         try {
           const d = new Date(timestamp);
-          updatedEl.textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' PT';
+          let txt = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' PT';
+          if (isCached) txt += ' (cached)';
+          updatedEl.textContent = txt;
         } catch (e) {
-          updatedEl.textContent = timestamp;
+          updatedEl.textContent = timestamp + (isCached ? ' (cached)' : '');
         }
       } else {
-        updatedEl.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        updatedEl.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + (isCached ? ' (cached)' : '');
       }
       
       // Total votes
       const totalEl = document.getElementById('total-votes');
-      totalEl.innerHTML = `<span class="font-mono">${formatNumber(totalVotes)}</span> votes reported`;
+      const baseTotal = `<span class="font-mono">${formatNumber(totalVotes)}</span> votes reported`;
       
-      if (totalVotes === 0) {
+      if (isCached) {
+        totalEl.innerHTML = baseTotal + ' <span class="text-amber-400 text-xs">(last known)</span>';
+      } else if (totalVotes === 0) {
         totalEl.innerHTML = '<span class="text-amber-400">0 votes reported — awaiting results</span>';
+      } else {
+        totalEl.innerHTML = baseTotal;
       }
       
       // Prepare data for charts: focus on prominent + others
