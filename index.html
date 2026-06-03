@@ -144,7 +144,7 @@
       <div class="flex items-center gap-4 text-sm">
         <div class="flex items-center gap-2 text-slate-400">
           <i class="fa-solid fa-clock text-base"></i>
-          <span>Last updated: <span id="last-updated" class="font-medium text-slate-300 tabular-nums">--</span></span>
+          <span>Last refreshed: <span id="last-updated" class="font-medium text-slate-300 tabular-nums">--</span></span>
         </div>
         <div id="total-votes" class="font-semibold px-3 py-1 bg-slate-900 border border-slate-800 rounded-xl text-sm tabular-nums">
           0 votes reported
@@ -485,7 +485,7 @@
       // when we successfully poll for the latest vote numbers.
       const timeToShow = lastChecked || timestamp;
       
-      // Update last updated
+      // Update last refreshed (our fetch time)
       const updatedEl = document.getElementById('last-updated');
       if (timeToShow) {
         try {
