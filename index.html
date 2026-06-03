@@ -493,6 +493,13 @@
           let txt = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' PT';
           if (isCached) txt += ' (cached)';
           updatedEl.textContent = txt;
+          // Tooltip: show the official source timestamp if we have a separate one
+          if (timestamp && lastChecked && timestamp !== lastChecked) {
+            try {
+              const srcD = new Date(timestamp);
+              updatedEl.title = 'Official source data timestamp: ' + srcD.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' PT (our last poll may be more recent)';
+            } catch(e) { updatedEl.title = 'Source timestamp: ' + timestamp; }
+          }
         } catch (e) {
           updatedEl.textContent = timeToShow + (isCached ? ' (cached)' : '');
         }
