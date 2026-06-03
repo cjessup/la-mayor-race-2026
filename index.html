@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LA Mayor Race 2026 • Live Results</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+    
+    :root {
+      --primary: #1e3a8a;
+    }
+    
+    body {
+      font-family: 'Inter', system_ui, sans-serif;
+    }
+    
+    .font-display {
+      font-family: 'Space Grotesk', 'Inter', system_ui, sans-serif;
+      font-weight: 600;
+    }
+
+    .election-header {
+      background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    }
+
+    .result-card {
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s;
+    }
+
+    .result-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+
+    .vote-bar {
+      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.3s;
+      height: 10px;
+      border-radius: 9999px;
+      background: linear-gradient(90deg, var(--bar-color), #1e40af);
+    }
+
+    .section-title {
+      font-size: 0.95rem;
+      letter-spacing: -.025em;
+      font-weight: 600;
+    }
+
+    .candidate-row {
+      transition: background-color 0.1s;
+    }
+    
+    .candidate-row:hover {
+      background-color: #f8fafc;
+    }
+
+    .chart-container {
+      position: relative;
+    }
+
+    .live-dot {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    .stat-value {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .la-badge {
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(10px);
+    }
+
+    .data-table th {
+      font-weight: 500;
+      color: #64748b;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .progress-container {
+      background-color: #f1e7ff20;
+      border-radius: 9999px;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-200">
+  <!-- Header -->
+  <div class="election-header border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-6 py-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-inner">
+            <i class="fa-solid fa-city text-[#1e3a8a] text-3xl"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-3">
+              <h1 class="font-display text-4xl tracking-tighter font-semibold">Los Angeles Mayor</h1>
+              <div class="la-badge text-xs font-medium px-3 py-1 rounded-full text-white/90 flex items-center gap-1.5 border border-white/20">
+                <div class="w-2 h-2 bg-emerald-400 rounded-full live-dot"></div>
+                <span class="font-mono tracking-[1px]">2026 PRIMARY</span>
+              </div>
+            </div>
+            <p class="text-white/70 text-sm mt-0.5">Live unofficial results • June 2, 2026</p>
+          </div>
+        </div>
+
+        <!-- Prominent Refresh Button -->
+        <div class="flex items-center gap-3">
+          <button 
+            id="refresh-btn"
+            onclick="manualRefresh()"
+            class="group flex items-center justify-center gap-2.5 bg-white hover:bg-amber-50 active:bg-white transition-all text-[#1e3a8a] font-semibold px-8 py-3.5 rounded-2xl shadow-lg shadow-black/20 hover:shadow-xl text-base active:scale-[0.985]">
+            <i class="fa-solid fa-sync-alt group-active:rotate-180 transition-transform duration-300"></i>
+            <span>REFRESH NOW</span>
+          </button>
+          <div class="hidden sm:flex flex-col items-end text-right">
+            <div class="text-[10px] uppercase tracking-widest text-white/50">Auto-refresh</div>
+            <div id="next-refresh" class="font-mono text-sm text-white/80 tabular-nums">60s</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-6 py-8">
+    <!-- Status Bar -->
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-6">
+      <div class="flex items-center gap-3">
+        <div class="inline-flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-2xl px-4 h-9 text-sm">
+          <i class="fa-solid fa-database text-emerald-400"></i>
+          <span id="status-text" class="font-medium text-emerald-300">Live from LA County</span>
+        </div>
+        <div class="text-xs text-slate-400 hidden md:block">
+          Source: <a href="https://results.lavote.gov/" target="_blank" class="underline hover:text-slate-300">results.lavote.gov</a>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-4 text-sm">
+        <div class="flex items-center gap-2 text-slate-400">
+          <i class="fa-solid fa-clock text-base"></i>
+          <span>Last updated: <span id="last-updated" class="font-medium text-slate-300 tabular-nums">--</span></span>
+        </div>
+        <div id="total-votes" class="font-semibold px-3 py-1 bg-slate-900 border border-slate-800 rounded-xl text-sm tabular-nums">
+          0 votes reported
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Visualizations -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Linear View / Horizontal Bars -->
+      <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-3xl p-6 result-card">
+        <div class="flex items-center justify-between mb-5 px-1">
+          <div>
+            <div class="section-title flex items-center gap-2 text-slate-100">
+              <i class="fa-solid fa-chart-bar text-blue-400"></i>
+              <span>LINEAR RESULTS</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-0.5">Ranked by vote share</div>
+          </div>
+          <div class="text-[10px] px-2.5 py-1 bg-slate-800 text-slate-400 rounded-lg font-mono">BAR CHART</div>
+        </div>
+        
+        <div class="chart-container h-[280px] px-2">
+          <canvas id="bar-chart"></canvas>
+        </div>
+        
+        <div class="mt-4 text-[11px] text-center text-slate-400">
+          Horizontal bars represent share of reported votes in the mayoral race
+        </div>
+      </div>
+
+      <!-- Pie Chart -->
+      <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-3xl p-6 result-card">
+        <div class="flex items-center justify-between mb-5 px-1">
+          <div>
+            <div class="section-title flex items-center gap-2 text-slate-100">
+              <i class="fa-solid fa-chart-pie text-violet-400"></i>
+              <span>PIE CHART</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-0.5">Vote distribution</div>
+          </div>
+          <div class="text-[10px] px-2.5 py-1 bg-slate-800 text-slate-400 rounded-lg font-mono">PIE</div>
+        </div>
+        
+        <div class="chart-container h-[280px] flex items-center justify-center">
+          <canvas id="pie-chart"></canvas>
+        </div>
+        
+        <div id="pie-legend" class="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-1 px-2 text-xs"></div>
+      </div>
+    </div>
+
+    <!-- Key Candidates Summary -->
+    <div class="mt-6 bg-slate-900 border border-slate-800 rounded-3xl p-6">
+      <div class="flex items-center gap-2 mb-4 px-1">
+        <i class="fa-solid fa-users text-amber-400"></i>
+        <div class="section-title">KEY CANDIDATES</div>
+        <div class="flex-1 h-px bg-slate-800 mx-3"></div>
+        <div class="text-xs uppercase text-slate-400 tracking-widest">Top contenders</div>
+      </div>
+      
+      <div id="key-candidates" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- Full Results Table -->
+    <div class="mt-6 bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden">
+      <div class="px-6 pt-5 pb-3 flex items-center justify-between">
+        <div class="section-title px-1">ALL CANDIDATES — SORTED BY VOTES</div>
+        <div class="text-xs text-slate-400">Non-partisan primary • Top two advance</div>
+      </div>
+      
+      <div class="overflow-x-auto">
+        <table class="w-full data-table">
+          <thead>
+            <tr class="border-y border-slate-800 bg-slate-950">
+              <th class="text-left pl-6 py-3 w-8">#</th>
+              <th class="text-left py-3">Candidate</th>
+              <th class="text-right py-3 pr-4">Votes</th>
+              <th class="text-right py-3 w-24">Share</th>
+              <th class="text-left py-3 pr-6 w-64">Linear share</th>
+            </tr>
+          </thead>
+          <tbody id="candidates-table" class="divide-y divide-slate-800 text-sm">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="px-6 py-4 bg-slate-950 border-t border-slate-800 text-xs text-slate-400 flex flex-wrap gap-x-6 gap-y-1">
+        <div><span class="font-semibold text-slate-300">Note:</span> Results are unofficial and will update as more ballots are counted by the LA County Registrar-Recorder.</div>
+        <div>Top two candidates advance to the November general election (unless one receives a majority in the primary).</div>
+      </div>
+    </div>
+
+    <!-- Footer info -->
+    <div class="mt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs text-slate-400 px-1">
+      <div>
+        Polling the official LA County results endpoint every 60 seconds. 
+        Click <span class="font-semibold text-slate-300">REFRESH NOW</span> for immediate update.
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="px-3 py-1 bg-slate-900 border border-slate-800 rounded-xl">Data updates when available from county</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tailwind script
+    function initTailwind() {
+      document.documentElement.style.setProperty('--accent', '#1e40af');
+    }
+
+    let barChart = null;
+    let pieChart = null;
+    let autoRefreshInterval = null;
+    let countdownInterval = null;
+    let secondsUntilRefresh = 60;
+    let isFetching = false;
+
+    const CANDIDATE_COLORS = {
+      'KAREN RUTH BASS': '#2563eb',
+      'NITHYA RAMAN': '#16a34a',
+      'SPENCER PRATT': '#ea580c',
+      'default': '#64748b'
+    };
+
+    function getColorFor(name) {
+      const key = name.toUpperCase();
+      return CANDIDATE_COLORS[key] || CANDIDATE_COLORS.default;
+    }
+
+    async function fetchResults() {
+      if (isFetching) return;
+      isFetching = true;
+      
+      const statusEl = document.getElementById('status-text');
+      const originalStatus = statusEl.innerHTML;
+      
+      try {
+        statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Updating...';
+        
+        const res = await fetch('/api/results', { cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed to load results: ' + res.status);
+        
+        const data = await res.json();
+        updateUI(data);
+        
+        statusEl.innerHTML = '<i class="fa-solid fa-check mr-1.5 text-emerald-400"></i> Live from LA County';
+        statusEl.className = 'font-medium text-emerald-300';
+        
+        // Reset countdown
+        resetCountdown();
+      } catch (err) {
+        console.error(err);
+        statusEl.innerHTML = '<i class="fa-solid fa-exclamation-triangle mr-1.5"></i> Update failed (retrying...)';
+        statusEl.className = 'font-medium text-amber-400';
+        
+        // Show friendly message in UI if first load
+        const totalEl = document.getElementById('total-votes');
+        if (totalEl.textContent.includes('0 votes')) {
+          totalEl.innerHTML = '<span class="text-amber-400">Awaiting first results</span>';
+        }
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    function formatNumber(num) {
+      return num.toLocaleString();
+    }
+
+    function formatPercent(pct) {
+      return pct.toFixed(1) + '%';
+    }
+
+    function updateUI(data) {
+      const { timestamp, totalVotes, candidates } = data;
+      
+      // Update last updated
+      const updatedEl = document.getElementById('last-updated');
+      if (timestamp) {
+        try {
+          const d = new Date(timestamp);
+          updatedEl.textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' PT';
+        } catch (e) {
+          updatedEl.textContent = timestamp;
+        }
+      } else {
+        updatedEl.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      }
+      
+      // Total votes
+      const totalEl = document.getElementById('total-votes');
+      totalEl.innerHTML = `<span class="font-mono">${formatNumber(totalVotes)}</span> votes reported`;
+      
+      if (totalVotes === 0) {
+        totalEl.innerHTML = '<span class="text-amber-400">0 votes reported — awaiting results</span>';
+      }
+      
+      // Prepare data for charts: focus on prominent + others
+      const mainNames = ['KAREN RUTH BASS', 'NITHYA RAMAN', 'SPENCER PRATT'];
+      
+      let mainCands = [];
+      let otherVotes = 0;
+      let otherCount = 0;
+      
+      const sorted = [...candidates].sort((a, b) => b.votes - a.votes);
+      
+      sorted.forEach(c => {
+        const upper = c.name.toUpperCase();
+        if (mainNames.includes(upper)) {
+          mainCands.push(c);
+        } else {
+          otherVotes += c.votes;
+          otherCount++;
+        }
+      });
+      
+      // Add "Others" if any
+      const chartData = [...mainCands];
+      if (otherVotes > 0) {
+        chartData.push({
+          name: `Other${otherCount > 1 ? 's' : ''} (${otherCount})`,
+          votes: otherVotes,
+          pct: totalVotes > 0 ? (otherVotes / totalVotes * 100) : 0,
+          isOther: true
+        });
+      }
+      
+      // Sort main for display
+      mainCands = mainCands.sort((a,b) => b.votes - a.votes);
+      
+      // Update Bar Chart (linear)
+      updateBarChart(chartData);
+      
+      // Update Pie
+      updatePieChart(chartData);
+      
+      // Update key candidates cards (top 3 real ones)
+      updateKeyCandidates(mainCands, totalVotes);
+      
+      // Update full table
+      updateCandidatesTable(sorted, totalVotes);
+    }
+
+    function updateBarChart(data) {
+      const ctx = document.getElementById('bar-chart');
+      
+      const labels = data.map(d => d.name);
+      const votes = data.map(d => d.votes);
+      const pcts = data.map(d => d.pct);
+      const bgColors = data.map(d => d.isOther ? '#64748b' : getColorFor(d.name));
+      
+      if (barChart) {
+        barChart.data.labels = labels;
+        barChart.data.datasets[0].data = pcts;
+        barChart.data.datasets[0].backgroundColor = bgColors;
+        barChart.update();
+        return;
+      }
+      
+      barChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Vote share %',
+            data: pcts,
+            backgroundColor: bgColors,
+            borderColor: '#0f172a',
+            borderWidth: 1,
+            borderRadius: 4,
+            barThickness: 28,
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              grid: { color: '#334155', lineWidth: 0.5 },
+              borderColor: '#475569',
+              ticks: { 
+                color: '#94a3b8', 
+                font: { size: 11 },
+                callback: (val) => val + '%'
+              },
+              max: Math.max(100, Math.ceil(Math.max(...pcts) / 5) * 5)
+            },
+            y: {
+              grid: { display: false, drawBorder: false },
+              borderColor: '#475569',
+              ticks: { 
+                color: '#e2e8f0', 
+                font: { size: 13, weight: 500 },
+                padding: 6
+              }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const idx = ctx.dataIndex;
+                  return ` ${votes[idx].toLocaleString()} votes  •  ${pcts[idx].toFixed(1)}%`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function updatePieChart(data) {
+      const ctx = document.getElementById('pie-chart');
+      
+      const labels = data.map(d => d.name);
+      const pcts = data.map(d => Math.round(d.pct * 10) / 10);
+      const votes = data.map(d => d.votes);
+      const bgColors = data.map(d => d.isOther ? '#64748b' : getColorFor(d.name));
+      
+      // Update legend separately for better control
+      updatePieLegend(data, bgColors);
+      
+      if (pieChart) {
+        pieChart.data.labels = labels;
+        pieChart.data.datasets[0].data = pcts;
+        pieChart.data.datasets[0].backgroundColor = bgColors;
+        pieChart.update();
+        return;
+      }
+      
+      pieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: pcts,
+            backgroundColor: bgColors,
+            borderColor: '#0f172a',
+            borderWidth: 3,
+            hoverOffset: 18
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const idx = ctx.dataIndex;
+                  return ` ${votes[idx].toLocaleString()} votes (${pcts[idx]}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function updatePieLegend(data, colors) {
+      const container = document.getElementById('pie-legend');
+      container.innerHTML = '';
+      
+      data.forEach((item, i) => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center gap-2 text-xs';
+        
+        const colorDot = document.createElement('div');
+        colorDot.className = `w-3 h-3 rounded-full flex-shrink-0`;
+        colorDot.style.backgroundColor = colors[i];
+        
+        const label = document.createElement('div');
+        label.className = 'flex-1 min-w-0 flex items-baseline justify-between gap-2';
+        label.innerHTML = `
+          <span class="font-medium text-slate-200 truncate">${item.name}</span>
+          <span class="font-mono text-slate-400 tabular-nums flex-shrink-0">${item.pct.toFixed(1)}%</span>
+        `;
+        
+        div.appendChild(colorDot);
+        div.appendChild(label);
+        container.appendChild(div);
+      });
+    }
+
+    function updateKeyCandidates(mainCands, totalVotes) {
+      const container = document.getElementById('key-candidates');
+      container.innerHTML = '';
+      
+      if (mainCands.length === 0) {
+        const div = document.createElement('div');
+        div.className = 'col-span-3 text-center py-6 text-slate-400 text-sm border border-dashed border-slate-700 rounded-2xl';
+        div.textContent = 'No results yet — check back after counting begins.';
+        container.appendChild(div);
+        return;
+      }
+      
+      mainCands.slice(0, 3).forEach((cand, idx) => {
+        const color = getColorFor(cand.name);
+        const pct = totalVotes > 0 ? (cand.votes / totalVotes * 100) : 0;
+        
+        const card = document.createElement('div');
+        card.className = `bg-slate-950 border border-slate-700 rounded-2xl p-4 flex gap-4 items-start`;
+        
+        card.innerHTML = `
+          <div class="w-4 h-4 mt-1.5 rounded-full flex-shrink-0" style="background-color: ${color}"></div>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-lg tracking-tight leading-none">${cand.name}</div>
+            <div class="mt-3 flex items-baseline gap-2">
+              <div class="text-3xl font-semibold tabular-nums font-mono">${pct.toFixed(1)}</div>
+              <div class="text-sm text-slate-400">%</div>
+            </div>
+            <div class="text-xs mt-px text-slate-400">
+              <span class="font-medium text-slate-300">${formatNumber(cand.votes)}</span> votes
+            </div>
+            
+            <div class="mt-3 h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div class="h-2 rounded-full transition-all" 
+                   style="width: ${Math.max(pct, 1.5)}%; background-color: ${color}"></div>
+            </div>
+          </div>
+        `;
+        
+        container.appendChild(card);
+      });
+    }
+
+    function updateCandidatesTable(sortedCands, totalVotes) {
+      const tbody = document.getElementById('candidates-table');
+      tbody.innerHTML = '';
+      
+      if (sortedCands.length === 0 || (sortedCands.length === 1 && sortedCands[0].votes === 0)) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td colspan="5" class="pl-6 py-8 text-center text-slate-400">
+            Results will appear here once the first batch of votes is reported by the county.
+          </td>
+        `;
+        tbody.appendChild(tr);
+        return;
+      }
+      
+      sortedCands.forEach((cand, index) => {
+        const pct = totalVotes > 0 ? (cand.votes / totalVotes * 100) : 0;
+        const color = getColorFor(cand.name);
+        
+        const tr = document.createElement('tr');
+        tr.className = 'candidate-row';
+        
+        tr.innerHTML = `
+          <td class="pl-6 py-3 text-xs text-slate-400 font-mono w-8">${index + 1}</td>
+          <td class="py-3 pr-3">
+            <div class="flex items-center gap-2">
+              <span class="font-medium">${cand.name}</span>
+            </div>
+          </td>
+          <td class="py-3 pr-4 text-right font-mono text-sm tabular-nums">${formatNumber(cand.votes)}</td>
+          <td class="py-3 pr-3 text-right">
+            <span class="font-semibold tabular-nums">${pct.toFixed(1)}%</span>
+          </td>
+          <td class="py-3 pr-6">
+            <div class="flex items-center gap-3">
+              <div class="flex-1 progress-container h-[7px]">
+                <div class="h-[7px] rounded-full" 
+                     style="width: ${Math.max(0.8, pct)}%; background-color: ${color}"></div>
+              </div>
+              <div class="w-9 text-right text-[10px] text-slate-400 tabular-nums font-mono">${pct.toFixed(0)}%</div>
+            </div>
+          </td>
+        `;
+        
+        tbody.appendChild(tr);
+      });
+    }
+
+    function resetCountdown() {
+      secondsUntilRefresh = 60;
+      updateCountdownDisplay();
+      
+      if (countdownInterval) clearInterval(countdownInterval);
+      
+      countdownInterval = setInterval(() => {
+        secondsUntilRefresh--;
+        if (secondsUntilRefresh <= 0) {
+          secondsUntilRefresh = 60;
+          fetchResults();
+        }
+        updateCountdownDisplay();
+      }, 1000);
+    }
+
+    function updateCountdownDisplay() {
+      const el = document.getElementById('next-refresh');
+      if (el) {
+        el.textContent = `${secondsUntilRefresh}s`;
+        if (secondsUntilRefresh <= 10) {
+          el.classList.add('text-amber-400');
+        } else {
+          el.classList.remove('text-amber-400');
+        }
+      }
+    }
+
+    async function manualRefresh() {
+      const btn = document.getElementById('refresh-btn');
+      const originalText = btn.innerHTML;
+      
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>REFRESHING</span>`;
+      
+      await fetchResults();
+      
+      // brief delay so user sees it did something
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }, 420);
+    }
+
+    function startAutoPolling() {
+      // Initial fetch
+      fetchResults();
+      
+      // Set up 60s interval (the countdown also triggers it)
+      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+      
+      // The countdown handles the timing, but we also set a safety interval
+      autoRefreshInterval = setInterval(() => {
+        // Only fetch if countdown is near end in case of drift
+        if (secondsUntilRefresh <= 3) {
+          fetchResults();
+        }
+      }, 60000);
+      
+      // Start countdown display
+      resetCountdown();
+    }
+
+    function init() {
+      initTailwind();
+      
+      // Start everything
+      startAutoPolling();
+      
+      // Keyboard support: press "r" or "/" to refresh
+      document.addEventListener('keydown', (e) => {
+        if (e.key.toLowerCase() === 'r' && document.activeElement.tagName === 'BODY') {
+          e.preventDefault();
+          manualRefresh();
+        }
+        if (e.key === '/' && document.activeElement.tagName === 'BODY') {
+          e.preventDefault();
+          manualRefresh();
+        }
+      });
+      
+      // Easter egg: click the header to force refresh
+      const header = document.querySelector('.election-header');
+      if (header) {
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', (e) => {
+          if (e.target.closest('#refresh-btn')) return;
+          manualRefresh();
+        });
+      }
+      
+      // Show initial hint if no data
+      setTimeout(() => {
+        const totalEl = document.getElementById('total-votes');
+        if (totalEl && totalEl.textContent.includes('0 votes')) {
+          // Already handled in update
+        }
+      }, 8000);
+      
+      console.log('%c[LA Mayor] Live results site initialized. Polling /api/results every ~60s.', 'color:#64748b');
+    }
+    
+    // Boot
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
