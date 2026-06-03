@@ -417,6 +417,11 @@
           data = await fetchAndParseUpstream();
         }
         
+        // Record the time *this page* successfully retrieved the data.
+        // This is more useful than the source's Timestamp if the county feed's
+        // metadata timestamp isn't updating frequently.
+        data.lastChecked = new Date().toISOString();
+        
         updateUI(data);
         
         // Cache the successful result so we can show something useful if a future refresh temporarily fails
@@ -472,19 +477,24 @@
     }
 
     function updateUI(data) {
-      const { timestamp, totalVotes, candidates } = data;
+      const { timestamp, totalVotes, candidates, lastChecked } = data;
       const isCached = !!data._fromCache;
+      
+      // Prefer lastChecked (when *we* fetched it) over the source's "Timestamp"
+      // field, because the county JSON's top-level timestamp can be stale even
+      // when we successfully poll for the latest vote numbers.
+      const timeToShow = lastChecked || timestamp;
       
       // Update last updated
       const updatedEl = document.getElementById('last-updated');
-      if (timestamp) {
+      if (timeToShow) {
         try {
-          const d = new Date(timestamp);
+          const d = new Date(timeToShow);
           let txt = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' PT';
           if (isCached) txt += ' (cached)';
           updatedEl.textContent = txt;
         } catch (e) {
-          updatedEl.textContent = timestamp + (isCached ? ' (cached)' : '');
+          updatedEl.textContent = timeToShow + (isCached ? ' (cached)' : '');
         }
       } else {
         updatedEl.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + (isCached ? ' (cached)' : '');

@@ -13,6 +13,7 @@ Features:
 
 import json
 import time
+from datetime import datetime, timezone
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
@@ -66,7 +67,8 @@ def build_results_payload(full_data):
             "timestamp": full_data.get("Timestamp"),
             "totalVotes": 0,
             "candidates": [],
-            "error": "Mayor contest not found in feed"
+            "error": "Mayor contest not found in feed",
+            "lastChecked": datetime.now(timezone.utc).isoformat()
         }
 
     candidates_raw = contest.get("Candidates", [])
@@ -86,13 +88,15 @@ def build_results_payload(full_data):
     # Sort by votes desc for convenience
     candidates.sort(key=lambda x: x["votes"], reverse=True)
 
-    return {
+    payload = {
         "timestamp": full_data.get("Timestamp"),
         "totalVotes": total,
         "candidates": candidates,
         "contestTitle": contest.get("Title"),
-        "source": "https://results.lavote.gov/"
+        "source": "https://results.lavote.gov/",
+        "lastChecked": datetime.now(timezone.utc).isoformat()
     }
+    return payload
 
 
 def get_cached_results():
@@ -122,7 +126,8 @@ def get_cached_results():
             "timestamp": None,
             "totalVotes": 0,
             "candidates": [],
-            "error": str(exc)
+            "error": str(exc),
+            "lastChecked": datetime.now(timezone.utc).isoformat()
         }
 
 
