@@ -335,18 +335,46 @@
     }
 
     async function fetchWithFallback(url) {
-      // Try direct first (works in some environments / future-proof)
+      // Try direct first (works locally or if CORS is allowed)
       try {
         const res = await fetch(url, { cache: 'no-store' });
-        if (res.ok) return res;
-        throw new Error('direct not ok');
-      } catch (directErr) {
-        // Fallback to a public CORS proxy (required for GitHub Pages static hosting)
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        const res = await fetch(proxyUrl, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Both direct and proxy failed. Last status: ' + res.status);
-        return res;
+        if (res.ok) {
+          console.log('[data] Direct fetch succeeded');
+          return res;
+        }
+      } catch (e) {
+        // expected on GitHub Pages due to CORS
       }
+
+      // Public CORS proxies (tried in order until one works)
+      // These are needed for the static GitHub Pages version.
+      const proxies = [
+        (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+        (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+        // fallback option if others are down
+        (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+      ];
+
+      for (let i = 0; i < proxies.length; i++) {
+        const proxyUrl = proxies[i](url);
+        try {
+          console.log(`[data] Trying proxy ${i+1}/${proxies.length}: ${proxyUrl.substring(0,80)}...`);
+          const res = await fetch(proxyUrl, { cache: 'no-store' });
+          if (res.ok) {
+            // Some proxies return JSON directly, some wrap it. allorigins /raw returns raw.
+            // codetabs returns the body directly as JSON when we .json() it.
+            console.log(`[data] Proxy ${i+1} succeeded`);
+            return res;
+          }
+          console.warn(`[data] Proxy ${i+1} returned status ${res.status}`);
+        } catch (err) {
+          console.warn(`[data] Proxy ${i+1} error:`, err.message);
+        }
+        // small delay before next proxy
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      throw new Error('All proxies failed. The data source or proxies may be temporarily unavailable.');
     }
 
     async function fetchAndParseUpstream() {
