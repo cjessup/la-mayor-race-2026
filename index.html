@@ -245,7 +245,7 @@
     <!-- Footer info -->
     <div class="mt-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs text-slate-400 px-1">
       <div>
-        Polling the official LA County results endpoint every 60 seconds. 
+        Polling the official LA County results endpoint every 60 seconds (client-side via CORS proxy when hosted statically). 
         Click <span class="font-semibold text-slate-300">REFRESH NOW</span> for immediate update.
       </div>
       <div class="flex items-center gap-2">
@@ -279,20 +279,107 @@
       return CANDIDATE_COLORS[key] || CANDIDATE_COLORS.default;
     }
 
+    // === Client-side data fetching (enables fully static hosting on GitHub Pages) ===
+    const UPSTREAM_URL = 'https://results.lavote.gov/electionresults/json?electionid=4338';
+    const MAYOR_KEYWORDS = ['los angeles city primary nominating election mayor'];
+
+    function getMayorContest(fullData) {
+      const election = (fullData && (fullData.Election || fullData.election)) || {};
+      const groups = election.ContestGroups || election.contestGroups || [];
+      for (const cg of groups) {
+        const contests = cg.Contests || cg.contests || [];
+        for (const contest of contests) {
+          const title = ((contest.Title || contest.title) || '').toLowerCase();
+          if (MAYOR_KEYWORDS.some(kw => title.includes(kw))) {
+            return contest;
+          }
+        }
+      }
+      return null;
+    }
+
+    function buildResultsPayload(fullData) {
+      const contest = getMayorContest(fullData);
+      if (!contest) {
+        return {
+          timestamp: fullData && (fullData.Timestamp || fullData.timestamp),
+          totalVotes: 0,
+          candidates: [],
+          error: 'Mayor contest not found in feed'
+        };
+      }
+      const candidatesRaw = contest.Candidates || contest.candidates || [];
+      let total = 0;
+      for (const c of candidatesRaw) {
+        total += parseInt(c.Votes || c.votes || 0, 10) || 0;
+      }
+      const candidates = [];
+      for (const c of candidatesRaw) {
+        const votes = parseInt(c.Votes || c.votes || 0, 10) || 0;
+        const pct = total > 0 ? (votes / total * 100) : 0;
+        candidates.push({
+          name: c.Name || c.name || 'Unknown',
+          party: c.Party || c.party || 'Non Partisan',
+          votes: votes,
+          pct: Math.round(pct * 100) / 100
+        });
+      }
+      candidates.sort((a, b) => b.votes - a.votes);
+      return {
+        timestamp: fullData && (fullData.Timestamp || fullData.timestamp),
+        totalVotes: total,
+        candidates: candidates,
+        contestTitle: contest.Title || contest.title,
+        source: 'https://results.lavote.gov/'
+      };
+    }
+
+    async function fetchAndParseUpstream() {
+      // We use a public CORS proxy so this page works when served statically
+      // from GitHub Pages (github.io). Direct browser fetches to the county
+      // endpoint are often blocked by CORS. The proxy is only used for the
+      // hosted static version; local python server still works via /api.
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(UPSTREAM_URL)}`;
+      const res = await fetch(proxyUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load upstream data via proxy: ' + res.status);
+      const fullData = await res.json();
+      return buildResultsPayload(fullData);
+    }
+
     async function fetchResults() {
       if (isFetching) return;
       isFetching = true;
       
       const statusEl = document.getElementById('status-text');
-      const originalStatus = statusEl.innerHTML;
       
       try {
         statusEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Updating...';
         
-        const res = await fetch('/api/results', { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed to load results: ' + res.status);
+        let data;
+        const isLocal = location.hostname === 'localhost' ||
+                        location.hostname === '127.0.0.1' ||
+                        location.protocol === 'file:';
         
-        const data = await res.json();
+        if (isLocal) {
+          try {
+            // Prefer the local python server when running `python server.py`
+            // (provides caching + no 3rd-party proxy dependency for devs)
+            const res = await fetch('/api/results', { cache: 'no-store' });
+            if (res.ok) {
+              data = await res.json();
+            } else {
+              throw new Error('local server not responding');
+            }
+          } catch (localErr) {
+            // Fallback: fetch directly (via CORS proxy) so the page works
+            // even when you just open index.html in a browser
+            data = await fetchAndParseUpstream();
+          }
+        } else {
+          // On GitHub Pages or any static host: use upstream via CORS proxy
+          data = await fetchAndParseUpstream();
+        }
+        
         updateUI(data);
         
         statusEl.innerHTML = '<i class="fa-solid fa-check mr-1.5 text-emerald-400"></i> Live from LA County';
@@ -307,7 +394,7 @@
         
         // Show friendly message in UI if first load
         const totalEl = document.getElementById('total-votes');
-        if (totalEl.textContent.includes('0 votes')) {
+        if (totalEl && totalEl.textContent.includes('0 votes')) {
           totalEl.innerHTML = '<span class="text-amber-400">Awaiting first results</span>';
         }
       } finally {
@@ -727,7 +814,7 @@
         }
       }, 8000);
       
-      console.log('%c[LA Mayor] Live results site initialized. Polling /api/results every ~60s.', 'color:#64748b');
+      console.log('%c[LA Mayor] Live results site initialized. Client-side polling (local /api or CORS proxy to LA County).', 'color:#64748b');
     }
     
     // Boot
