@@ -334,14 +334,23 @@
       };
     }
 
+    async function fetchWithFallback(url) {
+      // Try direct first (works in some environments / future-proof)
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res.ok) return res;
+        throw new Error('direct not ok');
+      } catch (directErr) {
+        // Fallback to a public CORS proxy (required for GitHub Pages static hosting)
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const res = await fetch(proxyUrl, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Both direct and proxy failed. Last status: ' + res.status);
+        return res;
+      }
+    }
+
     async function fetchAndParseUpstream() {
-      // We use a public CORS proxy so this page works when served statically
-      // from GitHub Pages (github.io). Direct browser fetches to the county
-      // endpoint are often blocked by CORS. The proxy is only used for the
-      // hosted static version; local python server still works via /api.
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(UPSTREAM_URL)}`;
-      const res = await fetch(proxyUrl, { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load upstream data via proxy: ' + res.status);
+      const res = await fetchWithFallback(UPSTREAM_URL);
       const fullData = await res.json();
       return buildResultsPayload(fullData);
     }
